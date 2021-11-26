@@ -1,5 +1,5 @@
 ---
-title: "test"
+title: "DATA11002 Term project"
 output: github_document
 ---
 
@@ -8,3 +8,60 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+```{r data_preprocess}
+
+# Tehdään nää kikat mitä ekassa harkkasetissä
+# Voi jatkaa jollain summary-taulukoilla tai korrelaatioploteilla
+
+npf_train <- read.csv("npf_train.csv")
+npf_test <- read.csv("npf_test_hidden.csv")
+
+rownames(npf_train) <- npf_train[,"date"] 
+npf_train <- npf_train[,-(1:2)]
+npf_train <- npf_train[,-2]
+
+npf_train$class2 <- factor("event",levels=c("nonevent","event"))
+npf_train$class2[npf_train$class4=="nonevent"] <- "nonevent"
+
+
+```
+
+```{r data_exploration}
+npf.pca <- prcomp(npf_train[, c(2:101)], center = TRUE, scale. = TRUE)
+
+#Katotaan 10 ekan komponentin selitysvoima
+summary(npf.pca)$importance[,1:10]
+
+# Tsekkaillaan visuaalisesti (tää heittää mulla ainakin warningia jos ajaa konsoliin mutta latoo ihan ok?)
+
+screeplot(npf.pca, type = "l", npcs = 15, main = "Screeplot of the first 15 PCs")
+abline(h = 1, col="red", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+
+# Eigenvalue 1 lähestyy 7 komponentin nurkilla
+
+cumpro <- cumsum(npf.pca$sdev^2 / sum(npf.pca$sdev^2))
+plot(cumpro[0:15], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+abline(v = 7, col="blue", lty=5)
+abline(h = 0.7981, col="blue", lty=5)
+legend("topleft", legend=c("Cut-off @ PC7"),
+       col=c("blue"), lty=5, cex=0.6)
+
+# Näyttäisi siltä että 7 komponenttia selittää 79,8% varianssista - komponenttien määrän lisääminen ei enää hirveästi kasvata selitysvoimaa -> Olisko tässä hyvä vai tarvisko pienentää?
+
+```
+
+```{r data_exploration2}
+#install.packages("ggfortify")
+# Vähän lisätutkailua class2 ja class4 jakautumisesta kahteen ekaan komponenttiin
+library(ggfortify)
+
+autoplot(npf.pca, data = npf_train, colour = 'class2')
+autoplot(npf.pca, data = npf_train, colour = 'class4')
+```
+
+```{r pcascores_analysis}
+# Laitetaan PCA-komponenttien pisteet datasettiin mukaan havainnoille
+npf_train <- cbind(npf_train, npf.pca$x[, c(1:7)])
+```
