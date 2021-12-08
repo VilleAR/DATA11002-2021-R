@@ -23,7 +23,6 @@ npf_train <- npf_train[,-2]
 npf_train$class2 <- factor("event",levels=c("nonevent","event"))
 npf_train$class2[npf_train$class4=="nonevent"] <- "nonevent"
 
-
 ```
 
 ```{r data_exploration}
@@ -31,6 +30,8 @@ npf.pca <- prcomp(npf_train[, c(2:101)], center = TRUE, scale. = TRUE)
 
 #Katotaan 10 ekan komponentin selitysvoima
 summary(npf.pca)$importance[,1:10]
+library(ggfortify)
+autoplot(npf.pca, data = npf_train, colour = 'class4')
 
 # Tsekkaillaan visuaalisesti (tää heittää mulla ainakin warningia jos ajaa konsoliin mutta latoo ihan ok?)
 
@@ -62,6 +63,73 @@ autoplot(npf.pca, data = npf_train, colour = 'class4')
 ```
 
 ```{r pcascores_analysis}
-# Laitetaan PCA-komponenttien pisteet datasettiin mukaan havainnoille
+
+#Laitetaan PCA-komponenttien pisteet datasettiin mukaan havainnoille
 npf_train <- cbind(npf_train, npf.pca$x[, c(1:7)])
+
+#muunnetaan factor-muotoon class-muuttujat
+newc2<-rep(0, 458)
+for (i in 1:458){
+  if (npf_train$class2[i]=="event"){
+    newc2[i]<-1
+  }
+}
+npf_train$class2<-newc2
+npf_train$class2 <- as.factor(npf_train$class2)
+npf_train$class4 <- as.factor(npf_train$class4)
+
+trains<-npf_train[,-1]
+test<-trains[300:458,]
+trains<-trains[1:259,]
+#logistinen regressio
+
+
+#ajetaan treeniaineiston fit testidatalle
+test_pca <- predict(npf.pca, newdata = npf_test)
+npf_test <- cbind(npf_test, test_pca[, c(1:7)])
+#logistinen regressio testiaineistolle
+#npf_preds <- predict(log_reg, newdata=npf_test, type = "response")
+#ennustettu luokka
+#npf_test$class2 <- ifelse(npf_preds>=0.5,"event","nonevent")
+# samat naive bayesilla
+library(e1071)
+
+# näyttää pdf-formaatissa erilaiselta (=paremmalta)...
+```
+
+``` {r model validation, CV}
+library(caret)
+library(ranger)
+#Cross validation:
+trctrl<-trainControl(method = "cv", number = 5)
+log_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=npf_train,method="glm",family="binomial",trControl=trctrl)
+nb_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=npf_train,method="naive_bayes",trControl=trctrl)
+rf_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=trains,method="ranger",trControl=trctrl)
+
+
+CVs<-c(log_fit$results$Accuracy,nb_fit$results$Accuracy[1],rf_fit$results$Accuracy[1])
+
+#Test set accuracy:
+#Log reg
+log_reg <- glm(class2 ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7, data = trains, family = "binomial")
+lr_preds<-predict(log_reg,newdata=test)
+lr_acc <- mean(ifelse(lr_preds>=0.5,"1","0")==test$class2)
+#NB
+nb_fit <- naiveBayes(class2 ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7, data = trains)
+nb_preds <- predict(nb_fit, newdata=test)
+nb_acc <- mean(nb_preds==test$class2)
+#RF
+pred<-predict(rf_fit,test)
+rf_acc<-1-mean((as.numeric(pred)-as.numeric(test$class2))^2)
+
+# yhteen ja tehdään taulukko
+accs = c(lr_acc, nb_acc,rf_acc)
+df <- data.frame(accs)
+
+row.names(df) = c("Logistic regression","Naive Bayes", "Random Forest")
+
+df$CV_accuracy<-CVs
+colnames(df) = c("Test set accuracy", "Cross validation accuracy")
+knitr::kable(df, caption="Test set accuracies and cross validation accuracies for different models")
+
 ```
