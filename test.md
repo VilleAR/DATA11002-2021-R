@@ -162,15 +162,16 @@ accs = c(lr_acc, nb_acc,rf_acc)
 df <- data.frame(accs)
 
 row.names(df) = c("Logistic regression","Naive Bayes", "Random Forest")
-colnames(df) = c("Accuracy")
+
 df$CV_accuracy<-CVs
+colnames(df) = c("Test set accuracy", "Cross validation accuracy")
 knitr::kable(df, caption="Test set accuracies and cross validation accuracies for different models")
 ```
 
-|                     |  Accuracy | CV_accuracy |
-|:--------------------|----------:|------------:|
-| Logistic regression | 0.8364780 |   0.8231008 |
-| Naive Bayes         | 0.8050314 |   0.8187052 |
-| Random Forest       | 0.8176101 |   0.8106335 |
+|                     | Test set accuracy | Cross validation accuracy |
+|:--------------------|------------------:|--------------------------:|
+| Logistic regression |         0.8364780 |                 0.8165552 |
+| Naive Bayes         |         0.8050314 |                 0.8318442 |
+| Random Forest       |         0.8364780 |                 0.8107089 |
 
 Test set accuracies and cross validation accuracies for different models

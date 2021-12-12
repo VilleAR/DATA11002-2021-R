@@ -27,7 +27,6 @@ npf_train$class2[npf_train$class4=="nonevent"] <- "nonevent"
 
 ```{r data_exploration}
 npf.pca <- prcomp(npf_train[, c(2:101)], center = TRUE, scale. = TRUE)
-
 #Katotaan 10 ekan komponentin selitysvoima
 summary(npf.pca)$importance[,1:10]
 library(ggfortify)
@@ -65,7 +64,7 @@ autoplot(npf.pca, data = npf_train, colour = 'class4')
 ```{r pcascores_analysis}
 
 #Laitetaan PCA-komponenttien pisteet datasettiin mukaan havainnoille
-npf_train <- cbind(npf_train, npf.pca$x[, c(1:7)])
+npf_train <- cbind(npf_train, npf.pca$x[, c(1:13)])
 
 #muunnetaan factor-muotoon class-muuttujat
 newc2<-rep(0, 458)
@@ -79,14 +78,16 @@ npf_train$class2 <- as.factor(npf_train$class2)
 npf_train$class4 <- as.factor(npf_train$class4)
 
 trains<-npf_train[,-1]
+trains2<-npf_train[1:299,]#class 4
+test2<-npf_train[300:458,]
 test<-trains[300:458,]
-trains<-trains[1:259,]
+trains<-trains[1:299,]
 #logistinen regressio
 
 
 #ajetaan treeniaineiston fit testidatalle
 test_pca <- predict(npf.pca, newdata = npf_test)
-npf_test <- cbind(npf_test, test_pca[, c(1:7)])
+npf_test <- cbind(npf_test, test_pca[, c(1:13)])
 #logistinen regressio testiaineistolle
 #npf_preds <- predict(log_reg, newdata=npf_test, type = "response")
 #ennustettu luokka
@@ -100,9 +101,10 @@ library(e1071)
 ``` {r model validation, CV}
 library(caret)
 library(ranger)
+library(adabag)
 #Cross validation:
 trctrl<-trainControl(method = "cv", number = 5)
-log_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=npf_train,method="glm",family="binomial",trControl=trctrl)
+log_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7+PC8+PC9+PC10+PC11+PC12+PC13,data=npf_train,method="glm",family="binomial",trControl=trctrl)
 nb_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=npf_train,method="naive_bayes",trControl=trctrl)
 rf_fit<-train(class2~PC1+PC2+PC3+PC4+PC5+PC6+PC7,data=trains,method="ranger",trControl=trctrl)
 
@@ -111,9 +113,12 @@ CVs<-c(log_fit$results$Accuracy,nb_fit$results$Accuracy[1],rf_fit$results$Accura
 
 #Test set accuracy:
 #Log reg
-log_reg <- glm(class2 ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7, data = trains, family = "binomial")
-lr_preds<-predict(log_reg,newdata=test)
+log_reg <- glm(class2 ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7+PC8+PC9+PC10+PC11+PC12+PC13, data = npf_train, family = "binomial")
+lr_preds<-predict(log_reg,newdata=npf_test[105:117],type="response")
+
 lr_acc <- mean(ifelse(lr_preds>=0.5,"1","0")==test$class2)
+lt<-ifelse(lr_preds>=0.5,"1","0")
+as.numeric(lt)[11:20]
 #NB
 nb_fit <- naiveBayes(class2 ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7, data = trains)
 nb_preds <- predict(nb_fit, newdata=test)
@@ -127,9 +132,70 @@ accs = c(lr_acc, nb_acc,rf_acc)
 df <- data.frame(accs)
 
 row.names(df) = c("Logistic regression","Naive Bayes", "Random Forest")
-
+table(npf_train$class4)
+table(t2$class4)
 df$CV_accuracy<-CVs
 colnames(df) = c("Test set accuracy", "Cross validation accuracy")
-knitr::kable(df, caption="Test set accuracies and cross validation accuracies for different models")
+train<-trains
+t2<-npf_train
+t2$class4<-sapply(t2$class4,unclass)
+
+trains2<-t2[1:299,]
+a<-trains2[103:115]
+a$class4<-trains2$class4
+a$class4<-as.factor(a$class4)
+test2<-t2[300:458,]
+test2$class4<-as.factor(test2$class4)
+a$class4<-as.factor(a$class4)
+model<-boosting(class4~.,data=a,boos=FALSE,mfinal=100)
+p2<-predict(model,test2[103:115])
+pret<-as.numeric(p2$class)
+
+corr<-0
+for (i in 1:159){
+  if (test2$class4[i]==4){
+    if (pret[i]==4){
+      corr<-corr+1
+    }
+  }else{
+    if(pret[i]!=4){
+      corr<-corr+1
+    }
+  }
+}
+corr/159
+
+pred<-predict(model,npf_test[105:117])
+preds<-as.numeric(pred$class)
+dfd<-data.frame(matrix(ncol=2,nrow=965))
+dfd$pred<-preds
+dfd$prob<-lr_preds
+dfd<-dfd[,-1]
+dfd<-dfd[,-2]
+good<-rep("a",965)
+
+for (i in 1:965){
+  if (preds[i]==4){
+    if (lr_preds[i]<0.5){
+      good[i]<-"yep"
+    } else {
+      good[i]<-"nope"
+    }
+  } else {
+    if(lr_preds[i]>0.5){
+      good[i]<-"yep"
+    
+    }else {
+      good[i]<-"nope"
+    }
+  }
+}
+
+dfd$good<-good
+table(good)
+table(preds)
+
+
+'knitr::kable(df, caption="Test set accuracies and cross validation accuracies for different models")
 
 ```
