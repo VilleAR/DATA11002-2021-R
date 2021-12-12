@@ -152,6 +152,7 @@ p2<-predict(model,test2[103:115])
 pret<-as.numeric(p2$class)
 
 corr<-0
+ct<-0
 for (i in 1:159){
   if (test2$class4[i]==4){
     if (pret[i]==4){
@@ -162,9 +163,43 @@ for (i in 1:159){
       corr<-corr+1
     }
   }
+  if (test2$class4[i]==pret[i]){
+    ct<-ct+1
+  }
 }
 corr/159
+ct/159
+#multiclass preds:
+trains2<-t2[103:115]
+trains2$class4<-t2$class4
+trains2$class4<-as.factor(trains2$class4)
+finalmodel<-boosting(class4~.,data=trains2,boos=FALSE,mfinal=100)
+pred<-predict(finalmodel,npf_test[105:117])
+predlist<-pred$class
+ans<-rep("a",965)
+for (i in 1:965){
+  if (predlist[i]=="4"){
+    ans[i]<-"nonevent"
+  } else if (predlist[i]=="3"){
+    ans[i]<-"II"
+  } else if (predlist[i]=="2"){
+    ans[i]<-"Ib"
+  } else {
+    ans[i]<-"Ia"
+  }
+}
+b<-pred$prob[,4]
+ans[475:485]
+prob<-1-b
+prob[475:485]
+ansdf<-data.frame(matrix(ncol=2,nrow=965))
+ansdf$X1<-ans
+ansdf$X2<-prob
+nprob<-round(prob,digits=2)
+ansdf$X2<-nprob
+write.csv(ansdf,"D:\\introtoml\\project\\answers.csv", row.names=FALSE)
 
+#-----------------
 pred<-predict(model,npf_test[105:117])
 preds<-as.numeric(pred$class)
 dfd<-data.frame(matrix(ncol=2,nrow=965))
